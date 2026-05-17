@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Token": {
+      "title": "Token",
+      "description": "Represents a citizen in the RTO queue.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tokenDisplayId": { "type": "string", "description": "e.g., RTO-101" },
+        "tokenNumber": { "type": "integer", "description": "Sequential number for logic" },
+        "name": { "type": "string" },
+        "serviceType": { "type": "string", "enum": ["DL", "Registration", "Renewal"] },
+        "mode": { "type": "string", "enum": ["online", "offline"] },
+        "priority": { "type": "string", "enum": ["normal", "senior"] },
+        "status": { "type": "string", "enum": ["waiting", "calling", "completed", "missed"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "calledAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string", "description": "Auth UID for online users" }
+      },
+      "required": ["tokenDisplayId", "name", "serviceType", "mode", "priority", "status", "timestamp", "tokenNumber"]
+    },
+    "Counter": {
+      "title": "Counter",
+      "description": "Global counters for token ID generation and logic tracking.",
+      "type": "object",
+      "properties": {
+        "lastTokenNumber": { "type": "integer" },
+        "activeNormalSinceLastSenior": { "type": "integer", "description": "Count of normal users served since last senior" }
+      },
+      "required": ["lastTokenNumber", "activeNormalSinceLastSenior"]
+    }
+  },
+  "firestore": {
+    "/tokens/{tokenId}": {
+      "schema": "Token",
+      "description": "The unified queue of all users."
+    },
+    "/meta/counters": {
+      "schema": "Counter",
+      "description": "Global state for queue management logic."
+    }
+  }
+}

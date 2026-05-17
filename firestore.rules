@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidToken(data, isCreate) {
+      return data.keys().hasAll(['tokenDisplayId', 'tokenNumber', 'name', 'serviceType', 'mode', 'priority', 'status', 'timestamp'])
+        && data.tokenDisplayId is string && data.tokenDisplayId.size() <= 20
+        && data.tokenNumber is int
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.serviceType in ['DL', 'Registration', 'Renewal', 'License Services', 'Vehicle Registration']
+        && data.mode in ['online', 'offline']
+        && data.priority in ['normal', 'senior']
+        && data.status in ['waiting', 'calling', 'completed', 'missed']
+        && (isCreate ? data.timestamp == request.time : data.timestamp == existing().timestamp);
+    }
+
+    function isValidCounter(data) {
+      return data.keys().hasAny(['lastTokenNumber', 'activeNormalSinceLastSenior']);
+    }
+
+    // --- Rules ---
+
+    match /tokens/{tokenId} {
+      // Hardened get, allow list for board view
+      allow get: if isValidId(tokenId);
+      allow list: if true;
+      
+      allow create: if isValidId(tokenId) 
+        && isValidToken(incoming(), true)
+        && (
+          (incoming().mode == 'online' && incoming().status == 'waiting') ||
+          (incoming().mode == 'offline' && incoming().status == 'waiting')
+        );
+
+      allow update: if isValidId(tokenId) 
+        && isValidToken(incoming(), false) 
+        && (
+          // Allow all common status transitions and their associated fields
+          incoming().diff(existing()).affectedKeys().hasAny(['status', 'calledAt', 'completedAt', 'counterNumber'])
+          || (incoming().status == 'missed')
+        );
+    }
+
+    match /meta/counters {
+      allow read: if true;
+      allow create, update: if isValidCounter(incoming());
+    }
+  }
+}
